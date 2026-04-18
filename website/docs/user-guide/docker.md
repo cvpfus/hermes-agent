@@ -273,10 +273,106 @@ The `--restart unless-stopped` flag handles most transient failures. If the gate
 docker restart hermes
 ```
 
+### Container health checks
+
+The image includes a mode-aware `HEALTHCHECK` that adapts its probe strategy to the active Hermes service, so Docker can distinguish a truly operational gateway or dashboard from a process that exists but is not functional.
+
+#### How it works
+
+The healthcheck script reads PID 1's command-line arguments to determine which Hermes mode is running, then selects the appropriate liveness signal:
+
+| Container command | Healthy when | Unhealthy when |
+|-----------------|--------------|----------------|
+| `hermes gateway run` | `gateway_state.json` exists, `gateway_state == "running"`, the recorded PID equals 1, and PID 1 is not a zombie | State file missing, parse error, `gateway_state` is any other value (`starting`, `startup_failed`, `draining`, `stopped`), PID mismatch, or zombie process |
+| `hermes dashboard` | HTTP `GET /api/status` on the dashboard's loopback interface returns 2xx | Connection failure, non-2xx response, or timeout |
+| Any other command (`hermes`, `hermes setup`, `hermes gateway status`, etc.) | PID 1 exists and is not a zombie | PID 1 missing or a zombie |
+
+This conservative design means:
+
+- **Gateway**: the container will report **unhealthy** while the gateway is in `starting` state (before all platforms have connected) and will only become healthy once it reaches `running`. A `startup_failed` state also keeps the container unhealthy, so Docker restart policies and Compose `depends_on` conditions resolve correctly.
+- **Dashboard**: the container is healthy only when the web server is actually responding to requests — a dashboard process that exists but is hung is still reported unhealthy.
+- **Interactive / one-off**: all non-service commands fall back to a simple PID 1 existence check, which is always a safe default for `docker run -it`.
+
+#### Tuning healthcheck parameters
+
+Override the Docker defaults when running the container if the gateway needs more startup time:
+
+```sh
+docker run -d \
+  --name hermes \
+  --restart unless-stopped \
+  --health-cmd "/opt/hermes/docker/healthcheck.sh" \
+  --health-interval 30s \
+  --health-timeout 10s \
+  --health-start-period 120s \
+  --health-retries 3 \
+  -v ~/.hermes:/opt/data \
+  -p 8642:8642 \
+  nousresearch/hermes-agent gateway run
+```
+
+Or in Compose:
+
+```yaml
+services:
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    command: gateway run
+    healthcheck:
+      test: ["/opt/hermes/docker/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+    # ...
+```
+
+#### Dashboard health probe
+
+For the dashboard container, the probe sends an HTTP request to the local dashboard (default `http://127.0.0.1:9119/api/status`). It respects `--host` and `--port` flags from the dashboard command — if `--host 0.0.0.0` is given the probe still targets `127.0.0.1` since the dashboard is container-local.
+
+To override the derived URL (for example when a reverse proxy fronts the dashboard), set the `HERMES_DASHBOARD_HEALTH_URL` environment variable:
+
+```sh
+docker run -d \
+  --name hermes-dashboard \
+  --restart unless-stopped \
+  -e HERMES_DASHBOARD_HEALTH_URL=http://localhost:9119/api/status \
+  -v ~/.hermes:/opt/data \
+  -p 9119:9119 \
+  nousresearch/hermes-agent dashboard
+```
+
+#### Compose service dependencies
+
+When the dashboard depends on the gateway, use `condition: service_healthy` so the dashboard container waits for the gateway to be fully operational (not just started):
+
+```yaml
+services:
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    command: gateway run
+    healthcheck:
+      test: ["/opt/hermes/docker/healthcheck.sh"]
+      start_period: 120s
+    # ...
+
+  dashboard:
+    image: nousresearch/hermes-agent:latest
+    command: dashboard --host 0.0.0.0
+    depends_on:
+      hermes:
+        condition: service_healthy
+    # ...
+```
+
+Without `condition: service_healthy`, Docker only waits for the container to start, not for the gateway to reach the `running` state.
+
 ### Checking container health
 
 ```sh
 docker logs --tail 50 hermes          # Recent logs
 docker run -it --rm nousresearch/hermes-agent:latest version     # Verify version
 docker stats hermes                    # Resource usage
+docker inspect --format='{{.State.Health.Status}}' hermes   # Current health
 ```

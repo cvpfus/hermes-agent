@@ -44,3 +44,19 @@ RUN chmod +x /opt/hermes/docker/entrypoint.sh
 ENV HERMES_HOME=/opt/data
 VOLUME [ "/opt/data" ]
 ENTRYPOINT [ "/opt/hermes/docker/entrypoint.sh" ]
+
+# ── Mode-aware Docker healthcheck ──────────────────────────────────────────
+# Inspects PID 1's argv to select the appropriate probe strategy:
+#   gateway run  -> HERMES_HOME/gateway_state.json (gateway_state == "running", pid == 1)
+#   dashboard    -> HTTP GET /api/status on loopback
+#   other        -> PID 1 alive and not a zombie (conservative default)
+#
+# Defaults (override via docker --health-cmd flag at runtime if needed):
+#   interval : 30 s
+#   timeout  : 10 s
+#   start-period: 60 s   (gateway takes time to transition from starting -> running)
+#   retries  : 3
+COPY --chmod=0755 docker/healthcheck.sh /opt/hermes/docker/healthcheck.sh
+COPY --chmod=0755 docker/healthcheck_probe.py /opt/hermes/docker/healthcheck_probe.py
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD-SHELL [ "/opt/hermes/docker/healthcheck.sh" ]
