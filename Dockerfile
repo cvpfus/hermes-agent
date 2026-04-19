@@ -59,4 +59,4 @@ ENTRYPOINT [ "/opt/hermes/docker/entrypoint.sh" ]
 COPY --chmod=0755 docker/healthcheck.sh /opt/hermes/docker/healthcheck.sh
 COPY --chmod=0755 docker/healthcheck_probe.py /opt/hermes/docker/healthcheck_probe.py
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD-SHELL [ "/opt/hermes/docker/healthcheck.sh" ]
+    CMD [ "/opt/hermes/docker/healthcheck.sh" ]
