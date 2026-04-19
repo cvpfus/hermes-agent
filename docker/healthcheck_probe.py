@@ -238,9 +238,10 @@ def healthy_dashboard(argv: Optional[list[str]]) -> bool:
     timeout, or non-2xx status is treated as unhealthy.
     """
     host, port = parse_host_port(argv)
-    if host == "" or host == HERMES_DASHBOARD_HEALTH_URL:
+    override = os.environ.get("HERMES_DASHBOARD_HEALTH_URL", "")
+    if host == "" or override:
         # Already a full URL — use it directly
-        url = os.environ.get("HERMES_DASHBOARD_HEALTH_URL", "")
+        url = override
     else:
         url = f"http://{host}:{port}/api/status"
 
