@@ -6,6 +6,8 @@ name: Docker
 # documentation.
 
 on:
+  # Allow manual runs from the Actions tab or `gh workflow run`.
+  workflow_dispatch:
   schedule:
     - cron: '18 6 * * *'
   push:
