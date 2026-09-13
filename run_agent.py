@@ -707,6 +707,13 @@ class AIAgent:
 
         self.model = model
         self.max_iterations = max_iterations
+        # User-configured custom HTTP headers (config.yaml model.custom_headers)
+        # merged into every OpenAI-compatible client this agent builds.
+        try:
+            from hermes_cli.config import get_custom_headers as _get_custom_headers
+            self._custom_headers = _get_custom_headers()
+        except Exception:
+            self._custom_headers = {}
         # Shared iteration budget — parent creates, children inherit.
         # Consumed by every LLM turn across parent + all subagents.
         self.iteration_budget = iteration_budget or IterationBudget(max_iterations)
@@ -4522,6 +4529,12 @@ class AIAgent:
         # copy locks the contract so future transport/keepalive work can't reintroduce
         # the same class of bug.
         client_kwargs = dict(client_kwargs)
+        custom_headers = getattr(self, "_custom_headers", None)
+        if custom_headers:
+            client_kwargs["default_headers"] = {
+                **(client_kwargs.get("default_headers") or {}),
+                **custom_headers,
+            }
         _validate_proxy_env_urls()
         _validate_base_url(client_kwargs.get("base_url"))
         if self.provider == "copilot-acp" or str(client_kwargs.get("base_url", "")).startswith("acp://copilot"):

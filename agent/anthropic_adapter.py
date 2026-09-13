@@ -292,8 +292,24 @@ def _common_betas_for_base_url(base_url: str | None) -> list[str]:
     return _COMMON_BETAS
 
 
+def _get_custom_headers() -> Dict[str, str]:
+    """Read ``model.custom_headers`` from config for merging into client headers.
+
+    Imported lazily so this low-level adapter has no hard dependency on
+    ``hermes_cli`` at module import time.
+    """
+    try:
+        from hermes_cli.config import get_custom_headers
+        return get_custom_headers()
+    except Exception:
+        return {}
+
+
 def build_anthropic_client(api_key: str, base_url: str = None):
     """Create an Anthropic client, auto-detecting setup-tokens vs API keys.
+
+    User-configured ``model.custom_headers`` (config.yaml) are merged into the
+    client's default headers on top of the auth-specific headers below.
 
     Returns an anthropic.Anthropic instance.
     """
@@ -347,6 +363,13 @@ def build_anthropic_client(api_key: str, base_url: str = None):
         if common_betas:
             kwargs["default_headers"] = {"anthropic-beta": ",".join(common_betas)}
 
+    custom_headers = _get_custom_headers()
+    if custom_headers:
+        kwargs["default_headers"] = {
+            **(kwargs.get("default_headers") or {}),
+            **custom_headers,
+        }
+
     return _anthropic_sdk.Anthropic(**kwargs)
 
 
@@ -371,10 +394,15 @@ def build_anthropic_bedrock_client(region: str):
         )
     from httpx import Timeout
 
-    return _anthropic_sdk.AnthropicBedrock(
-        aws_region=region,
-        timeout=Timeout(timeout=900.0, connect=10.0),
-    )
+    bedrock_kwargs = {
+        "aws_region": region,
+        "timeout": Timeout(timeout=900.0, connect=10.0),
+    }
+    custom_headers = _get_custom_headers()
+    if custom_headers:
+        bedrock_kwargs["default_headers"] = custom_headers
+
+    return _anthropic_sdk.AnthropicBedrock(**bedrock_kwargs)
 
 
 def read_claude_code_credentials() -> Optional[Dict[str, Any]]:

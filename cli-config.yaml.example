@@ -46,6 +46,15 @@ model:
   # api_key: "your-key-here"  # Uncomment to set here instead of .env
   base_url: "https://openrouter.ai/api/v1"
 
+  # Custom HTTP headers sent with every LLM request (Anthropic and
+  # OpenAI-compatible clients, including auxiliary model calls).
+  # Useful for request origin tagging, gateway routing, or cost-center
+  # attribution. Header values may reference environment variables.
+  #
+  # custom_headers:
+  #   X-Source: "hermes-agent"
+  #   X-Cost-Center: "team-ai-infra"
+
   # ── Token limits — two settings, easy to confuse ──────────────────────────
   #
   # context_length: TOTAL context window (input + output tokens combined).

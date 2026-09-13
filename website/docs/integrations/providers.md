@@ -404,6 +404,22 @@ model:
 
 Both approaches persist to `config.yaml`, which is the source of truth for model, provider, and base URL.
 
+### Custom HTTP Headers
+
+Some endpoints expect extra headers for routing, rate-limit tier selection, or request origin tagging. Add a `custom_headers` mapping under `model:` and Hermes will send it with every LLM request — both the main agent client and auxiliary model calls (summarization, vision, compression). This applies to Anthropic and OpenAI-compatible clients alike.
+
+```yaml
+# In ~/.hermes/config.yaml
+model:
+  provider: custom
+  base_url: http://localhost:8000/v1
+  custom_headers:
+    X-Source: hermes-agent
+    X-Cost-Center: team-ai-infra
+```
+
+Header values may reference environment variables (e.g. `${GATEWAY_TOKEN}`). Values you define take precedence over any headers Hermes sets for the provider.
+
 ### Switching Models with `/model`
 
 :::warning hermes model vs /model

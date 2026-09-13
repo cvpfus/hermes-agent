@@ -2810,6 +2810,33 @@ def load_config() -> Dict[str, Any]:
     return expanded
 
 
+def get_custom_headers() -> Dict[str, str]:
+    """Return user-configured custom HTTP headers for outgoing LLM requests.
+
+    Reads the ``model.custom_headers`` mapping from config.yaml and returns a
+    sanitized copy suitable for merging into an LLM client's ``default_headers``.
+    Values are coerced to strings; blank names and null values are dropped.
+    Returns an empty dict when the option is unset or malformed.
+    """
+    try:
+        model_config = load_config().get("model")
+    except Exception:
+        return {}
+    if not isinstance(model_config, dict):
+        return {}
+    raw_headers = model_config.get("custom_headers")
+    if not isinstance(raw_headers, dict):
+        return {}
+
+    headers: Dict[str, str] = {}
+    for name, value in raw_headers.items():
+        key = str(name).strip()
+        if not key or value is None:
+            continue
+        headers[key] = str(value)
+    return headers
+
+
 _SECURITY_COMMENT = """
 # ── Security ──────────────────────────────────────────────────────────
 # API keys, tokens, and passwords are redacted from tool output by default.
